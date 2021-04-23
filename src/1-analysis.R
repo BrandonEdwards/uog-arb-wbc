@@ -107,6 +107,27 @@ accum_plot <- ggplot() +
   geom_line(data = yearly, aes(x = Year, y = Accumulation), size = 1.25) +
   ylim(0, max(yearly$Accumulation) + 5) +
   NULL
-####### Output Data ###############################
+####### Output Data and Plots #####################
 
-#write.csv(combined, file = "data/combined.csv", row.names = FALSE)
+png(filename = "plots/abundance.png",
+    width = 6, height = 4, units = "in", res = 300)
+print(yearly_abundance_plot)
+dev.off()
+
+png(filename = "plots/yearly_sp.png",
+    width = 6, height = 4, units = "in", res = 300)
+print(yearly_sp_plot)
+dev.off()
+
+png(filename = "plots/shannon.png",
+    width = 6, height = 4, units = "in", res = 300)
+print(shannon_plot)
+dev.off()
+
+png(filename = "plots/accumulation.png",
+    width = 6, height = 4, units = "in", res = 300)
+print(accum_plot)
+dev.off()
+
+write.csv(combined, file = "data/combined_red.csv", row.names = FALSE)
+write.csv(yearly, file = "data/yearly_metrics.csv", row.names = FALSE)
