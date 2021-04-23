@@ -107,6 +107,28 @@ accum_plot <- ggplot() +
   geom_line(data = yearly, aes(x = Year, y = Accumulation), size = 1.25) +
   ylim(0, max(yearly$Accumulation) + 5) +
   NULL
+
+####### Select Species #############################
+
+sp <- c("Ruffed Grouse", "Red-bellied Woodpecker", "Mourning Dove", "Evening Grosbeak")
+
+sp_select <- combined_red[which(combined_red$Species %in% sp), ]
+
+rugr <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Ruffed Grouse", ],
+                             aes(x = Year, y = Count))
+rbwo <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Red-bellied Woodpecker", ],
+                             aes(x = Year, y = Count))
+modo <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Mourning Dove", ],
+                             aes(x = Year, y = Count))
+evgr <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Evening Grosbeak", ],
+                             aes(x = Year, y = Count))
+
+# Create matrix plot
+sp_select_abundance <- ggarrange(rugr, rbwo, modo, evgr,
+  nrow = 2, ncol = 2,
+  labels = c("RUGR", "RBWO", "MODO", "EVGR")
+)
+
 ####### Output Data and Plots #####################
 
 png(filename = "plots/abundance.png",
@@ -127,6 +149,11 @@ dev.off()
 png(filename = "plots/accumulation.png",
     width = 6, height = 4, units = "in", res = 300)
 print(accum_plot)
+dev.off()
+
+png(filename = "plots/sp_select.png",
+    width = 6, height = 6, units = "in", res = 300)
+print(sp_select_abundance)
 dev.off()
 
 write.csv(combined, file = "data/combined_red.csv", row.names = FALSE)
