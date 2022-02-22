@@ -3,7 +3,7 @@
 # 2021 Arboretum WBC Paper
 # 1-analysis.R
 # Created February 2021
-# Last Updated February 2021
+# Last Updated February 2022
 
 ####### Import Libraries and External Files #######
 
@@ -44,7 +44,10 @@ combined <- combined[, !(names(combined) %in% drops)]
 ####### Yearly Abundance, Richness, Diversity #####
 
 # Get rid of non-species
-combined_red <- combined[which(combined$Species %in% summary_stats[["Species"]]), ]
+species_list <- species_list[-which(grepl("sp.", species_list, fixed = FALSE) |
+                                grepl("unid.", species_list, fixed = FALSE))]
+
+combined_red <- combined[which(combined$Species %in% species_list), ]
 
 # Total abundance by year and rolling mean
 yearly <- aggregate(Count ~ Year, data = combined_red, FUN = sum)
@@ -93,7 +96,12 @@ yearly_abundance_plot <- ggplot() +
 # plot total species by year
 yearly_sp_plot <- ggplot() +
   geom_line(data = yearly, aes(x = Year, y = TotalSp), size = 1.25) +
-  ylim(0, max(yearly$TotalSp) + 5) +
+  ylim(0, max(yearly$TotalSp) + 10) +
+  annotate("segment", x = 1985, xend = 1980, y = 5, yend = 11, colour = "blue") +
+  annotate("segment", x = 1985, xend = 1982, y = 5, yend = 11, colour = "blue") +
+  annotate("text", x = 1990, y = 3, label = "Survey Minimum: 11\n(1980 & 1982)") +
+  annotate("segment", x = 2010, xend = 2021, y = 35, yend = 29, colour = "blue") +
+  annotate("text", x = 2008, y = 35, label = "Survey Maximum: 29\n(2021)") +
   NULL
 
 # Annual Shannon index
@@ -105,8 +113,21 @@ shannon_plot <- ggplot() +
 # plot species accumulation
 accum_plot <- ggplot() +
   geom_line(data = yearly, aes(x = Year, y = Accumulation), size = 1.25) +
-  ylim(0, max(yearly$Accumulation) + 5) +
+  ylim(0, max(yearly$Accumulation) + 15) +
+  xlim(1980, 2029)+
+  annotate("segment", x = 2024, xend = 2022, y = 45, yend = 60, colour = "blue") +
+  annotate("text", x = 2024, y = 40, label = "WCSP\n(2022)") +
+  annotate("segment", x = 2021, xend = 2019, y = 65, yend = 59, colour = "blue") +
+  annotate("text", x = 2021, y = 70, label = "CORA*\n(2019)") +
+  annotate("segment", x = 2024-10, xend = 2017, y = 40, yend = 58, colour = "blue") +
+  annotate("text", x = 2014, y = 35, label = "EATO\n(2017)") +
+  annotate("segment", x = 2010, xend = 2015, y = 65, yend = 57, colour = "blue") +
+  annotate("text", x = 2010, y = 70, label = "WIWR\n(2015)") +
+  annotate("segment", x = 2000, xend = 2013, y = 60, yend = 56, colour = "blue") +
+  annotate("text", x = 1990, y = 60, label = "RBWO*, BRTH, BADO\n(2013)") +
   NULL
+
+####### Trends #####################################
 
 ####### Select Species #############################
 
@@ -114,14 +135,31 @@ sp <- c("Ruffed Grouse", "Red-bellied Woodpecker", "Mourning Dove", "Evening Gro
 
 sp_select <- combined_red[which(combined_red$Species %in% sp), ]
 
-rugr <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Ruffed Grouse", ],
-                             aes(x = Year, y = Count))
-rbwo <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Red-bellied Woodpecker", ],
-                             aes(x = Year, y = Count))
-modo <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Mourning Dove", ],
-                             aes(x = Year, y = Count))
-evgr <- ggplot() + geom_line(data = sp_select[sp_select$Species == "Evening Grosbeak", ],
-                             aes(x = Year, y = Count))
+
+rugr <- ggplot() + 
+  geom_line(data = sp_select[sp_select$Species == "Ruffed Grouse", ],
+                             aes(x = Year, y = Count), alpha = 0.5) +
+  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
+                                      c("Year", "Count")], k = 5)),
+            aes(x = Year, y = Count), size = 1.25)
+rbwo <- ggplot() + 
+  geom_line(data = sp_select[sp_select$Species == "Red-bellied Woodpecker", ],
+            aes(x = Year, y = Count), alpha = 0.5) +
+  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
+                                                 c("Year", "Count")], k = 5)),
+            aes(x = Year, y = Count), size = 1.25)
+modo <- ggplot() + 
+  geom_line(data = sp_select[sp_select$Species == "Mourning Dove", ],
+            aes(x = Year, y = Count), alpha = 0.5) +
+  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Mourning Dove"),
+                                                 c("Year", "Count")], k = 5)),
+            aes(x = Year, y = Count), size = 1.25)
+evgr <- ggplot() + 
+  geom_line(data = sp_select[sp_select$Species == "Evening Grosbeak", ],
+            aes(x = Year, y = Count), alpha = 0.5) +
+  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
+                                                 c("Year", "Count")], k = 5)),
+            aes(x = Year, y = Count), size = 1.25)
 
 # Create matrix plot
 sp_select_abundance <- ggarrange(rugr, rbwo, modo, evgr,
