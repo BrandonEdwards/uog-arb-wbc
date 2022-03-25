@@ -89,8 +89,13 @@ for (y in unique(yearly$Year))
 
 # Plot yearly abundance and rolling mean
 yearly_abundance_plot <- ggplot() +
-  geom_line(data = yearly, aes(x = Year, y = Count), alpha = 0.5) +
-  geom_line(data = yearly, aes(x = Year, y = Rolling), size = 1.25) +
+  ylim(0, 800)+
+  geom_line(data = yearly, aes(x = Year, y = Count), size = 1.25) +#alpha = 0.5) +
+  #geom_line(data = yearly, aes(x = Year, y = Rolling), size = 1.25) +
+  annotate("segment", x = 1996, xend = 1987, y = 42, yend = 42, colour = "blue") +
+  annotate("text", x = 2004, y = 42, label = "Survey Minimum: 42 (1987)") +
+  annotate("segment", x = 1996+6, xend = 1987+6, y = 733, yend = 733, colour = "blue") +
+  annotate("text", x = 2004+6, y = 733, label = "Survey Maximum: 733\n(1993)") +
   NULL
 
 # plot total species by year
@@ -124,10 +129,30 @@ accum_plot <- ggplot() +
   annotate("segment", x = 2010, xend = 2015, y = 65, yend = 57, colour = "blue") +
   annotate("text", x = 2010, y = 70, label = "WIWR\n(2015)") +
   annotate("segment", x = 2000, xend = 2013, y = 60, yend = 56, colour = "blue") +
-  annotate("text", x = 1990, y = 60, label = "RBWO*, BRTH, BADO\n(2013)") +
+  annotate("text", x = 1990, y = 60, label = "RBWO*, BRTH*, BADO\n(2013)") +
   NULL
 
-####### Trends #####################################
+####### Gulls ######################################
+
+gulls <- c("Herring Gull", "Ring-billed Gull", "Great Black-backed Gull",
+           "Glaucous Gull", "gull sp.")
+
+gull_select <- combined[which(combined$Species %in% gulls), ]
+gull_select$Species <- factor(gull_select$Species,
+                              levels = c("Ring-billed Gull",
+                                         "Herring Gull",
+                                         "Great Black-backed Gull",
+                                         "Glaucous Gull",
+                                         "gull sp."))
+
+gull_plot <- ggplot(data = gull_select) +
+  geom_line(aes(x = Year, y = Count, group = Species, color = Species)) +
+  stat_summary(aes(x = Year, y = Count), fun = "sum", geom = "line", size = 1.25) +
+  theme(legend.position = "right") +
+  ylim(0, 450) +
+  annotate("segment", x = 2003, xend = 2003, y = 0, yend = 450, colour = "blue", size = 1.5) +
+  annotate("text", x = 2012, y = 200, label = "Guelph Landfill\nClosure (2003)") +
+  NULL
 
 ####### Select Species #############################
 
@@ -141,25 +166,36 @@ rugr <- ggplot() +
                              aes(x = Year, y = Count), alpha = 0.5) +
   geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
                                       c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25)
+            aes(x = Year, y = Count), size = 1.25) +
+  ylim(0, 12) +
+  NULL
+
 rbwo <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Red-bellied Woodpecker", ],
             aes(x = Year, y = Count), alpha = 0.5) +
   geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
                                                  c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25)
+            aes(x = Year, y = Count), size = 1.25) +
+  ylim(0,12) +
+  NULL
+
 modo <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Mourning Dove", ],
             aes(x = Year, y = Count), alpha = 0.5) +
   geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Mourning Dove"),
                                                  c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25)
+            aes(x = Year, y = Count), size = 1.25) +
+  ylim(0,70) +
+  NULL
+
 evgr <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Evening Grosbeak", ],
             aes(x = Year, y = Count), alpha = 0.5) +
   geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
                                                  c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25)
+            aes(x = Year, y = Count), size = 1.25) +
+  ylim(0,70) +
+  NULL
 
 # Create matrix plot
 sp_select_abundance <- ggarrange(rugr, rbwo, modo, evgr,
@@ -192,6 +228,11 @@ dev.off()
 png(filename = "plots/sp_select.png",
     width = 6, height = 6, units = "in", res = 300)
 print(sp_select_abundance)
+dev.off()
+
+png(filename = "plots/gulls.png",
+    width = 6, height = 4, units = "in", res = 300)
+print(gull_plot)
 dev.off()
 
 write.csv(combined, file = "data/combined_red.csv", row.names = FALSE)
