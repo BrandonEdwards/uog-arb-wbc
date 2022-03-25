@@ -11,14 +11,24 @@ library(zoo)
 library(ggplot2)
 library(GGally)
 library(ggpubr)
+library(lubridate)
+library(stringr)
+library(magrittr)
+library(reshape)
 theme_set(theme_pubclean())
 
 ####### Read Data #################################
 
 count_data <- read.csv("data/count_data.csv")
 bird_data <- read.csv("data/bird_data.csv")
+cbc_data <- read.csv("data/ONGU-transformed-per-hour.csv")
 
 ####### Wrangle Data ##############################
+
+# Melt CBC data
+cbc_data <- melt(cbc_data, id = "Species")
+names(cbc_data) <- c("Species", "Year", "BirdsPerHour")
+cbc_data$Year <- as.numeric(substr(cbc_data$Year, start = 2, stop = 6))
 
 species_list <- unique(bird_data$Species)
 
@@ -41,33 +51,40 @@ combined <- do.call(rbind, combined)
 drops <- c("TotalInd", "TotalSp")
 combined <- combined[, !(names(combined) %in% drops)]
 
-####### Yearly Abundance, Richness, Diversity #####
-
 # Get rid of non-species
 species_list <- species_list[-which(grepl("sp.", species_list, fixed = FALSE) |
-                                grepl("unid.", species_list, fixed = FALSE))]
+                                      grepl("unid.", species_list, fixed = FALSE))]
 
 combined_red <- combined[which(combined$Species %in% species_list), ]
 
+####### Calculate Survey Length & Birds Per Hour ##
+
+combined_red$TimeStart <- str_pad(combined_red$TimeStart,
+                                  4,
+                                  pad = "0")
+combined_red$TimeStart <- format(strptime(sprintf('%s', combined_red$TimeStart), format='%H%M'), '%H:%M')
+  
+
+combined_red$TimeEnd <- str_pad(combined_red$TimeEnd,
+                                  4,
+                                  pad = "0")
+combined_red$TimeEnd <- format(strptime(sprintf('%s', combined_red$TimeEnd), format='%H%M'), '%H:%M')
+
+combined_red$SurveyLength <- as.numeric(hm(combined_red$TimeEnd) - hm(combined_red$TimeStart)) / 3600
+
+combined_red$BirdsPerHour <- combined_red$Count / combined_red$SurveyLength
+
+####### Yearly Abundance, Richness, Diversity #####
+
 # Total abundance by year and rolling mean
-yearly <- aggregate(Count ~ Year, data = combined_red, FUN = sum)
-names(yearly) <- c("Year", "Count")
+yearly <- aggregate(BirdsPerHour ~ Year, data = combined_red, FUN = sum)
+names(yearly) <- c("Year", "BirdsPerHour")
 yearly_abundance_rolling <- data.frame(rollmean(yearly, k = 5))
 names(yearly_abundance_rolling) <- c("Year", "Rolling")
 yearly <- merge(yearly, yearly_abundance_rolling, by = "Year", all = TRUE)
 
 # Total species each year
 yearly <- merge(yearly, count_data[, c("Year", "TotalSp")], by = "Year")
-
-# Calculate Shannon index for each year
-yearly$Shannon <- NA
-for (y in unique(yearly$Year))
-{
-  temp <- combined_red[which(combined_red$Year == y &
-                               combined_red$Count > 0),]
-  p_vec <- temp$Count/yearly[yearly$Year == y, "Count"]
-  yearly[yearly$Year == y, "Shannon"] <- -1 * (sum(p_vec * log(p_vec)))
-}
 
 # Calculate species accumulation each year
 yearly$Accumulation <- NA
@@ -109,12 +126,6 @@ yearly_sp_plot <- ggplot() +
   annotate("text", x = 2008, y = 35, label = "Survey Maximum: 29\n(2021)") +
   NULL
 
-# Annual Shannon index
-shannon_plot <- ggplot() +
-  geom_line(data = yearly, aes(x = Year, y = Shannon), size = 1.25) +
-  ylim(0, 3) +
-  NULL
-
 # plot species accumulation
 accum_plot <- ggplot() +
   geom_line(data = yearly, aes(x = Year, y = Accumulation), size = 1.25) +
@@ -135,66 +146,82 @@ accum_plot <- ggplot() +
 ####### Gulls ######################################
 
 gulls <- c("Herring Gull", "Ring-billed Gull", "Great Black-backed Gull",
-           "Glaucous Gull", "gull sp.")
+           "Glaucous Gull")
 
-gull_select <- combined[which(combined$Species %in% gulls), ]
+gull_select <- combined_red[which(combined_red$Species %in% gulls), ]
 gull_select$Species <- factor(gull_select$Species,
                               levels = c("Ring-billed Gull",
                                          "Herring Gull",
                                          "Great Black-backed Gull",
-                                         "Glaucous Gull",
-                                         "gull sp."))
+                                         "Glaucous Gull"))
 
 gull_plot <- ggplot(data = gull_select) +
-  geom_line(aes(x = Year, y = Count, group = Species, color = Species)) +
-  stat_summary(aes(x = Year, y = Count), fun = "sum", geom = "line", size = 1.25) +
+  geom_line(aes(x = Year, y = BirdsPerHour, group = Species, color = Species)) +
+#  stat_summary(aes(x = Year, y = Count), fun = "sum", geom = "line", size = 1.25) +
   theme(legend.position = "right") +
-  ylim(0, 450) +
-  annotate("segment", x = 2003, xend = 2003, y = 0, yend = 450, colour = "blue", size = 1.5) +
-  annotate("text", x = 2012, y = 200, label = "Guelph Landfill\nClosure (2003)") +
+  #ylim(0, 450) +
+  annotate("segment", x = 2003, xend = 2003, y = 0, yend = 100, colour = "blue", size = 1.5) +
+  annotate("text", x = 2012, y = 50, label = "Guelph Landfill\nClosure (2003)") +
   NULL
 
 ####### Select Species #############################
 
 sp <- c("Ruffed Grouse", "Red-bellied Woodpecker", "Mourning Dove", "Evening Grosbeak")
 
-sp_select <- combined_red[which(combined_red$Species %in% sp), ]
+sp_select <- combined_red[which(combined_red$Species %in% sp), ]; sp_select$dataset <- "WBC"
+cbc_select <- cbc_data[which(cbc_data$Species %in% sp), ]; cbc_select$dataset <- "CBC"
+
+wbc_cbc <- rbind(sp_select[, c("Species", "Year", "BirdsPerHour", "dataset")],
+                 cbc_select[, c("Species", "Year", "BirdsPerHour", "dataset")])
+wbc_cbc <- wbc_cbc[which(wbc_cbc$Year >= 1980 & wbc_cbc$Year <= 2020), ]
 
 
 rugr <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Ruffed Grouse", ],
-                             aes(x = Year, y = Count), alpha = 0.5) +
-  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
-                                      c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25) +
-  ylim(0, 12) +
+                             aes(x = Year, y = BirdsPerHour)) +
+  geom_line(data = cbc_select[cbc_select$Species == "Ruffed Grouse", ], 
+            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+ # geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
+  #                                    c("Year", "BirdsPerHour")], k = 5)),
+           # aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  ylim(0, 3) +
+  xlim(1980, 2021) +
   NULL
 
 rbwo <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Red-bellied Woodpecker", ],
-            aes(x = Year, y = Count), alpha = 0.5) +
-  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
-                                                 c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25) +
-  ylim(0,12) +
+            aes(x = Year, y = BirdsPerHour)) +
+  geom_line(data = cbc_select[cbc_select$Species == "Red-bellied Woodpecker", ], 
+            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
+   #                                              c("Year", "BirdsPerHour")], k = 5)),
+            #aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  ylim(0,3) +
+  xlim(1980, 2021) +
   NULL
 
 modo <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Mourning Dove", ],
-            aes(x = Year, y = Count), alpha = 0.5) +
-  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Mourning Dove"),
-                                                 c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25) +
-  ylim(0,70) +
+            aes(x = Year, y = BirdsPerHour)) +
+  geom_line(data = cbc_select[cbc_select$Species == "Mourning Dove", ], 
+            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Mourning Dove"),
+   #                                              c("Year", "BirdsPerHour")], k = 5)),
+            #aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  ylim(0,20) +
+  xlim(1980, 2021) +
   NULL
 
 evgr <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Evening Grosbeak", ],
-            aes(x = Year, y = Count), alpha = 0.5) +
-  geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
-                                                 c("Year", "Count")], k = 5)),
-            aes(x = Year, y = Count), size = 1.25) +
-  ylim(0,70) +
+            aes(x = Year, y = BirdsPerHour)) +
+  geom_line(data = cbc_select[cbc_select$Species == "Evening Grosbeak", ], 
+            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
+   #                                              c("Year", "BirdsPerHour")], k = 5)),
+           # aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  ylim(0,20) +
+  xlim(1980, 2021) +
   NULL
 
 # Create matrix plot
