@@ -174,54 +174,72 @@ cbc_select <- cbc_data[which(cbc_data$Species %in% sp), ]; cbc_select$dataset <-
 wbc_cbc <- rbind(sp_select[, c("Species", "Year", "BirdsPerHour", "dataset")],
                  cbc_select[, c("Species", "Year", "BirdsPerHour", "dataset")])
 wbc_cbc <- wbc_cbc[which(wbc_cbc$Year >= 1980 & wbc_cbc$Year <= 2020), ]
+wbc_cbc <- wbc_cbc[-which(wbc_cbc$Year == 1983), ]
+
+corr_coefs <- vector(mode = "list", length = length(sp))
+names(corr_coefs) <- sp
+for (s in sp)
+{
+  temp <- wbc_cbc[which(wbc_cbc$Species == s), ]
+  corr_coefs[[s]] <- cor(temp[temp$dataset == "WBC", "BirdsPerHour"],
+                         temp[temp$dataset == "CBC", "BirdsPerHour"])
+}
 
 
 rugr <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Ruffed Grouse", ],
-                             aes(x = Year, y = BirdsPerHour)) +
+                             aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Ruffed Grouse", ], 
-            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+            aes(x = Year, y = BirdsPerHour)) +
+  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Ruffed Grouse"]], digits = 2))) +
  # geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
   #                                    c("Year", "BirdsPerHour")], k = 5)),
            # aes(x = Year, y = BirdsPerHour), size = 1.25) +
   ylim(0, 3) +
   xlim(1980, 2021) +
+  ylab("Birds Per Party Hour") +
   NULL
 
 rbwo <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Red-bellied Woodpecker", ],
-            aes(x = Year, y = BirdsPerHour)) +
-  geom_line(data = cbc_select[cbc_select$Species == "Red-bellied Woodpecker", ], 
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  geom_line(data = cbc_select[cbc_select$Species == "Red-bellied Woodpecker", ], 
+            aes(x = Year, y = BirdsPerHour)) +
+  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Red-bellied Woodpecker"]], digits = 2))) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
             #aes(x = Year, y = BirdsPerHour), size = 1.25) +
   ylim(0,3) +
   xlim(1980, 2021) +
+  ylab("Birds Per Party Hour") +
   NULL
 
 modo <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Mourning Dove", ],
-            aes(x = Year, y = BirdsPerHour)) +
-  geom_line(data = cbc_select[cbc_select$Species == "Mourning Dove", ], 
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  geom_line(data = cbc_select[cbc_select$Species == "Mourning Dove", ], 
+            aes(x = Year, y = BirdsPerHour)) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Mourning Dove"]], digits = 2))) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Mourning Dove"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
             #aes(x = Year, y = BirdsPerHour), size = 1.25) +
   ylim(0,20) +
   xlim(1980, 2021) +
+  ylab("Birds Per Party Hour") +
   NULL
 
 evgr <- ggplot() + 
   geom_line(data = sp_select[sp_select$Species == "Evening Grosbeak", ],
-            aes(x = Year, y = BirdsPerHour)) +
-  geom_line(data = cbc_select[cbc_select$Species == "Evening Grosbeak", ], 
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  geom_line(data = cbc_select[cbc_select$Species == "Evening Grosbeak", ], 
+            aes(x = Year, y = BirdsPerHour)) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Evening Grosbeak"]], digits = 2))) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
            # aes(x = Year, y = BirdsPerHour), size = 1.25) +
   ylim(0,20) +
   xlim(1980, 2021) +
+  ylab("Birds Per Party Hour") +
   NULL
 
 # Create matrix plot
