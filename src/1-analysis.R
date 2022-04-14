@@ -3,7 +3,7 @@
 # 2021 Arboretum WBC Paper
 # 1-analysis.R
 # Created February 2021
-# Last Updated February 2022
+# Last Updated April 2022
 
 ####### Import Libraries and External Files #######
 
@@ -15,6 +15,9 @@ library(lubridate)
 library(stringr)
 library(magrittr)
 library(reshape)
+library(dplyr)
+library(segmented)
+library(changepoint)
 theme_set(theme_pubclean())
 
 ####### Read Data #################################
@@ -29,6 +32,10 @@ cbc_data <- read.csv("data/ONGU-transformed-per-hour.csv")
 cbc_data <- melt(cbc_data, id = "Species")
 names(cbc_data) <- c("Species", "Year", "BirdsPerHour")
 cbc_data$Year <- as.numeric(substr(cbc_data$Year, start = 2, stop = 6))
+# Add 1 to the CBC year because the Guelph CBC happens in WBC$Year - 1, but it is still
+# a part of the same winter (e.g., 2021/2022 winter)
+cbc_data$Year <- cbc_data$Year + 1
+cbc_data <- cbc_data[which(cbc_data$Year >= 1980), ]
 
 species_list <- unique(bird_data$Species)
 
@@ -82,6 +89,28 @@ names(yearly) <- c("Year", "BirdsPerHour")
 yearly_abundance_rolling <- data.frame(rollmean(yearly, k = 5))
 names(yearly_abundance_rolling) <- c("Year", "Rolling")
 yearly <- merge(yearly, yearly_abundance_rolling, by = "Year", all = TRUE)
+yearly$FD <- NA
+for (i in 2:nrow(yearly))
+{
+  yearly$FD[i] <- yearly$BirdsPerHour[i] - yearly$BirdsPerHour[i-1]
+}
+
+yearly_cbc <- aggregate(BirdsPerHour ~ Year, data = cbc_data, FUN = sum)
+yearly_cbc <- dplyr::add_row(
+  yearly_cbc,
+  Year = 1984,
+  BirdsPerHour = NA,
+  .before = 5
+)
+yearly_abundance_rolling <- data.frame(rollmean(yearly_cbc, k = 5))
+names(yearly_abundance_rolling) <- c("Year", "Rolling")
+yearly_abundance_rolling$Year <- trunc(yearly_abundance_rolling$Year)
+yearly_cbc <- merge(yearly_cbc, yearly_abundance_rolling, by = "Year", all = TRUE)
+yearly_cbc$FD <- NA
+for (i in 2:nrow(yearly_cbc))
+{
+  yearly_cbc$FD[i] <- yearly_cbc$BirdsPerHour[i] - yearly_cbc$BirdsPerHour[i-1]
+}
 
 # Total species each year
 yearly <- merge(yearly, count_data[, c("Year", "TotalSp")], by = "Year")
@@ -104,15 +133,24 @@ for (y in unique(yearly$Year))
   yearly[yearly$Year == y, "Accumulation"] <- length(species_discovered)
 }
 
+# Calculate correlation between first differences
+abund_correlation_fd <- cor.test(yearly[which(yearly$Year >= 1986 & yearly$Year <= 2021), "FD"],
+                         yearly_cbc[which(yearly_cbc$Year >= 1986 & yearly_cbc$Year <= 2021), "FD"])
+annual_change_wbc <- lm(BirdsPerHour ~ Year, data = yearly[which(yearly$Year >= 1986 & yearly$Year <= 2021), ])
+annual_change_cbc <- lm(BirdsPerHour ~ Year, data = yearly_cbc[which(yearly_cbc$Year >= 1986 & yearly_cbc$Year <= 2021),])
+
 # Plot yearly abundance and rolling mean
 yearly_abundance_plot <- ggplot() +
-  ylim(0, 800)+
-  geom_line(data = yearly, aes(x = Year, y = Count), size = 1.25) +#alpha = 0.5) +
+  #ylim(0, 800)+
+  xlim(1980,2022) +
+  geom_line(data = yearly, aes(x = Year, y = BirdsPerHour), size = 1.25) +#alpha = 0.5) +
+  geom_line(data = yearly_cbc, aes(x = Year, y = BirdsPerHour)) +
+  ylab("Birds Per Party Hour") +
   #geom_line(data = yearly, aes(x = Year, y = Rolling), size = 1.25) +
-  annotate("segment", x = 1996, xend = 1987, y = 42, yend = 42, colour = "blue") +
-  annotate("text", x = 2004, y = 42, label = "Survey Minimum: 42 (1987)") +
-  annotate("segment", x = 1996+6, xend = 1987+6, y = 733, yend = 733, colour = "blue") +
-  annotate("text", x = 2004+6, y = 733, label = "Survey Maximum: 733\n(1993)") +
+  #annotate("segment", x = 1996, xend = 1987, y = 42, yend = 42, colour = "blue") +
+  #annotate("text", x = 2004, y = 42, label = "Survey Minimum: 42 (1987)") +
+  #annotate("segment", x = 1996+6, xend = 1987+6, y = 733, yend = 733, colour = "blue") +
+  #annotate("text", x = 2004+6, y = 733, label = "Survey Maximum: 733\n(1993)") +
   NULL
 
 # plot total species by year
@@ -148,15 +186,57 @@ accum_plot <- ggplot() +
 gulls <- c("Herring Gull", "Ring-billed Gull", "Great Black-backed Gull",
            "Glaucous Gull")
 
-gull_select <- combined_red[which(combined_red$Species %in% gulls), ]
-gull_select$Species <- factor(gull_select$Species,
+gull_select_wbc <- combined_red[which(combined_red$Species %in% gulls), ]
+gull_select_wbc$Species <- factor(gull_select_wbc$Species,
                               levels = c("Ring-billed Gull",
                                          "Herring Gull",
                                          "Great Black-backed Gull",
                                          "Glaucous Gull"))
+gull_select_wbc_all <- aggregate(BirdsPerHour ~ Year, data = gull_select_wbc, FUN = sum)
+gull_select_wbc_all$FD <- NA
+for (i in 2:nrow(gull_select_wbc_all))
+{
+  gull_select_wbc_all$FD[i] <- gull_select_wbc_all$BirdsPerHour[i] - gull_select_wbc_all$BirdsPerHour[i-1]
+}
 
-gull_plot <- ggplot(data = gull_select) +
-  geom_line(aes(x = Year, y = BirdsPerHour, group = Species, color = Species)) +
+gull_select_cbc <- cbc_data[which(cbc_data$Species %in% gulls), ]
+gull_select_cbc$Species <- factor(gull_select_cbc$Species,
+                          levels = c("Ring-billed Gull",
+                                     "Herring Gull",
+                                     "Great Black-backed Gull",
+                                     "Glaucous Gull"))
+gull_select_cbc_all <- aggregate(BirdsPerHour ~ Year, data = gull_select_cbc, FUN = sum)
+gull_select_cbc_all <- dplyr::add_row(
+  gull_select_cbc_all,
+  Year = 1984,
+  BirdsPerHour = NA,
+  .before = 5
+)
+gull_select_cbc_all$FD <- NA
+for (i in 2:nrow(gull_select_cbc_all))
+{
+  gull_select_cbc_all$FD[i] <- gull_select_cbc_all$BirdsPerHour[i] - gull_select_cbc_all$BirdsPerHour[i-1]
+}
+
+# Calculate correlation between first differences
+gull_correlation_fd <- cor.test(gull_select_wbc_all[which(gull_select_wbc_all$Year >= 1986 & gull_select_wbc_all$Year <= 2021), "FD"],
+                                gull_select_cbc_all[which(gull_select_cbc_all$Year >= 1986 & gull_select_cbc_all$Year <= 2021), "FD"])
+
+# Calculate changepoints
+fit_gull_wbc <- lm(BirdsPerHour ~ Year, data = gull_select_wbc_all[gull_select_wbc_all$Year >= 1985,])
+seg_gull_wbc <- segmented(fit_gull_wbc,
+                          seg.Z = ~ Year,
+                          psi = 2003)
+cpt.var(data = gull_select_wbc_all[gull_select_wbc_all$Year >= 1985, "BirdsPerHour"], Q = 1)
+fit_gull_cbc <- lm(BirdsPerHour ~ Year, data = gull_select_cbc_all[gull_select_cbc_all$Year >= 1985,])
+seg_gull_cbc <- segmented(fit_gull_cbc,
+                          seg.Z = ~ Year,
+                          psi = 2003)
+cpt.var(data = gull_select_cbc_all[gull_select_cbc_all$Year >= 1985, "BirdsPerHour"])
+
+gull_plot <- ggplot() +
+  geom_line(data = gull_select_wbc_all, aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  geom_line(data = gull_select_cbc_all, aes(x = Year, y = BirdsPerHour)) +
 #  stat_summary(aes(x = Year, y = Count), fun = "sum", geom = "line", size = 1.25) +
   theme(legend.position = "right") +
   #ylim(0, 450) +
@@ -258,11 +338,6 @@ dev.off()
 png(filename = "plots/yearly_sp.png",
     width = 6, height = 4, units = "in", res = 300)
 print(yearly_sp_plot)
-dev.off()
-
-png(filename = "plots/shannon.png",
-    width = 6, height = 4, units = "in", res = 300)
-print(shannon_plot)
 dev.off()
 
 png(filename = "plots/accumulation.png",
