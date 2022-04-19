@@ -114,6 +114,7 @@ for (i in 2:nrow(yearly_cbc))
 
 # Total species each year
 yearly <- merge(yearly, count_data[, c("Year", "TotalSp")], by = "Year")
+yearly_sp_trend <- lm(TotalSp ~ Year, data = yearly)
 
 # Calculate species accumulation each year
 yearly$Accumulation <- NA
@@ -154,9 +155,11 @@ yearly_abundance_plot <- ggplot() +
   NULL
 
 # plot total species by year
-yearly_sp_plot <- ggplot() +
-  geom_line(data = yearly, aes(x = Year, y = TotalSp), size = 1.25) +
+yearly_sp_plot <- ggplot(data = yearly, aes(x = Year, y = TotalSp)) +
+  geom_line(size = 1.25) +
   ylim(0, max(yearly$TotalSp) + 10) +
+  stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm', formula= y~x) +
   annotate("segment", x = 1985, xend = 1980, y = 5, yend = 11, colour = "blue") +
   annotate("segment", x = 1985, xend = 1982, y = 5, yend = 11, colour = "blue") +
   annotate("text", x = 1990, y = 3, label = "Survey Minimum: 11\n(1980 & 1982)") +
@@ -240,13 +243,15 @@ gull_plot <- ggplot() +
 #  stat_summary(aes(x = Year, y = Count), fun = "sum", geom = "line", size = 1.25) +
   theme(legend.position = "right") +
   #ylim(0, 450) +
-  annotate("segment", x = 2003, xend = 2003, y = 0, yend = 100, colour = "blue", size = 1.5) +
+  annotate("segment", x = 2003, xend = 2003, y = 0, yend = 100, colour = "blue", size = 1.25) +
   annotate("text", x = 2012, y = 50, label = "Guelph Landfill\nClosure (2003)") +
+  annotate("segment", x = 1991, xend = 1991, y = 0, yend = 100, colour = "blue", size = 1.25) +
+  annotate("text", x = 1984, y = 50, label = "Estimated Change\nPoint (1991)") +
   NULL
 
 ####### Select Species #############################
 
-sp <- c("Ruffed Grouse", "Red-bellied Woodpecker", "Mourning Dove", "Evening Grosbeak")
+sp <- c("Red-bellied Woodpecker", "Evening Grosbeak", "Ruffed Grouse", "Mourning Dove", "Downy Woodpecker", "American Tree Sparrow")
 
 sp_select <- combined_red[which(combined_red$Species %in% sp), ]; sp_select$dataset <- "WBC"
 cbc_select <- cbc_data[which(cbc_data$Species %in% sp), ]; cbc_select$dataset <- "CBC"
@@ -258,11 +263,24 @@ wbc_cbc <- wbc_cbc[-which(wbc_cbc$Year == 1983), ]
 
 corr_coefs <- vector(mode = "list", length = length(sp))
 names(corr_coefs) <- sp
+trends_wbc <- vector(mode = "list", length = length(sp))
+names(trends_wbc) <- sp
+trends_cbc <- vector(mode = "list", length = length(sp))
+names(trends_cbc) <- sp
+wbc_cbc$FD <- NA
 for (s in sp)
 {
   temp <- wbc_cbc[which(wbc_cbc$Species == s), ]
-  corr_coefs[[s]] <- cor(temp[temp$dataset == "WBC", "BirdsPerHour"],
-                         temp[temp$dataset == "CBC", "BirdsPerHour"])
+  for (i in 2:nrow(temp))
+  {
+    temp$FD[i] <- temp$BirdsPerHour[i] - temp$BirdsPerHour[i-1]
+  }
+  corr_coefs[[s]] <- cor.test(temp[which(temp$dataset == "WBC" &
+                                           temp$Year >= 1986), "BirdsPerHour"],
+                              temp[which(temp$dataset == "CBC" &
+                                           temp$Year >= 1986), "BirdsPerHour"])
+  trends_wbc[[s]] <- lm(BirdsPerHour ~ Year, data = temp[which(temp$dataset == "WBC" & temp$Year >= 1986),])
+  trends_cbc[[s]] <- lm(BirdsPerHour ~ Year, data = temp[which(temp$dataset == "CBC" & temp$Year >= 1986),])
 }
 
 
@@ -271,7 +289,7 @@ rugr <- ggplot() +
                              aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Ruffed Grouse", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Ruffed Grouse"]], digits = 2))) +
+  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Ruffed Grouse"]]$estimate, digits = 2))) +
  # geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
   #                                    c("Year", "BirdsPerHour")], k = 5)),
            # aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -285,7 +303,7 @@ rbwo <- ggplot() +
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Red-bellied Woodpecker", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Red-bellied Woodpecker"]], digits = 2))) +
+  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Red-bellied Woodpecker"]]$estimate, digits = 2))) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
             #aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -299,7 +317,7 @@ modo <- ggplot() +
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Mourning Dove", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Mourning Dove"]], digits = 2))) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Mourning Dove"]]$estimate, digits = 2))) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Mourning Dove"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
             #aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -313,7 +331,7 @@ evgr <- ggplot() +
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Evening Grosbeak", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Evening Grosbeak"]], digits = 2))) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Evening Grosbeak"]]$estimate, digits = 2))) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
            # aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -322,10 +340,40 @@ evgr <- ggplot() +
   ylab("Birds Per Party Hour") +
   NULL
 
+dowo <- ggplot() + 
+  geom_line(data = sp_select[sp_select$Species == "Downy Woodpecker", ],
+            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  geom_line(data = cbc_select[cbc_select$Species == "Downy Woodpecker", ], 
+            aes(x = Year, y = BirdsPerHour)) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Downy Woodpecker"]]$estimate, digits = 2))) +
+  #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
+  #                                              c("Year", "BirdsPerHour")], k = 5)),
+  # aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  ylim(0,20) +
+  xlim(1980, 2021) +
+  ylab("Birds Per Party Hour") +
+  NULL
+
+atsp <- ggplot() + 
+  geom_line(data = sp_select[sp_select$Species == "American Tree Sparrow", ],
+            aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  geom_line(data = cbc_select[cbc_select$Species == "American Tree Sparrow", ], 
+            aes(x = Year, y = BirdsPerHour)) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["American Tree Sparrow"]]$estimate, digits = 2))) +
+  #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
+  #                                              c("Year", "BirdsPerHour")], k = 5)),
+  # aes(x = Year, y = BirdsPerHour), size = 1.25) +
+  ylim(0,20) +
+  xlim(1980, 2021) +
+  ylab("Birds Per Party Hour") +
+  NULL
+
 # Create matrix plot
-sp_select_abundance <- ggarrange(rugr, rbwo, modo, evgr,
-  nrow = 2, ncol = 2,
-  labels = c("RUGR", "RBWO", "MODO", "EVGR")
+sp_select_abundance <- ggarrange(rbwo, evgr,
+                                 rugr, modo, 
+                                 dowo, atsp,
+  nrow = 3, ncol = 2,
+  labels = c("RBWO", "EVGR", "RUGR", "MODO", "DOWO", "ATSP")
 )
 
 ####### Output Data and Plots #####################
