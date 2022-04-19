@@ -165,6 +165,7 @@ yearly_sp_plot <- ggplot(data = yearly, aes(x = Year, y = TotalSp)) +
   annotate("text", x = 1990, y = 3, label = "Survey Minimum: 11\n(1980 & 1982)") +
   annotate("segment", x = 2010, xend = 2021, y = 35, yend = 29, colour = "blue") +
   annotate("text", x = 2008, y = 35, label = "Survey Maximum: 29\n(2021)") +
+  ylab("Number of Species") +
   NULL
 
 # plot species accumulation
@@ -247,6 +248,7 @@ gull_plot <- ggplot() +
   annotate("text", x = 2012, y = 50, label = "Guelph Landfill\nClosure (2003)") +
   annotate("segment", x = 1991, xend = 1991, y = 0, yend = 100, colour = "blue", size = 1.25) +
   annotate("text", x = 1984, y = 50, label = "Estimated Change\nPoint (1991)") +
+  ylab("Birds Per Party Hour") +
   NULL
 
 ####### Select Species #############################
