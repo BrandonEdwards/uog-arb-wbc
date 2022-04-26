@@ -61,8 +61,24 @@ combined <- combined[, !(names(combined) %in% drops)]
 # Get rid of non-species
 species_list <- species_list[-which(grepl("sp.", species_list, fixed = FALSE) |
                                       grepl("unid.", species_list, fixed = FALSE))]
-
 combined_red <- combined[which(combined$Species %in% species_list), ]
+
+# Now for CBC Data
+cbc_data[which(cbc_data$Species == "Green-winged Teal (American)"), "Species"] <- "Green-winged Teal"
+cbc_data[which(cbc_data$Species == "Great Egret (American)"), "Species"] <- "Great Egret"
+cbc_data[which(cbc_data$Species == "Great Blue Heron (Blue form)"), "Species"] <- "Great Blue Heron"
+cbc_data[which(cbc_data$Species == "Rock Pigeon (Feral Pigeon)"), "Species"] <- "Rock Pigeon"
+cbc_data[which(cbc_data$Species == "Northern Flicker (Yellow-shafted)"), "Species"] <- "Northern Flicker"
+cbc_data[which(cbc_data$Species == "Yellow-rumped Warbler (Myrtle)"), "Species"] <- "Yellow-rumped Warbler"
+cbc_data[which(cbc_data$Species == "Dark-eyed Junco (Slate-colored)"), "Species"] <- "Dark-eyed Junco"
+cbc_data[which(cbc_data$Species == "Dark-eyed Junco (Oregon)"), "Species"] <- "Dark-eyed Junco"
+
+species_list_cbc <- unique(cbc_data$Species)
+species_list_cbc <- species_list_cbc[-which(grepl("sp.", species_list_cbc, fixed = FALSE) |
+                                      grepl("unid.", species_list_cbc, fixed = FALSE) |
+                                      grepl("(", species_list_cbc, fixed = TRUE) |
+                                      grepl("/", species_list_cbc, fixed = TRUE))]
+cbc_data_red <- cbc_data[which(cbc_data$Species %in% species_list_cbc), ]
 
 ####### Calculate Survey Length & Birds Per Hour ##
 
@@ -95,7 +111,7 @@ for (i in 2:nrow(yearly))
   yearly$FD[i] <- yearly$BirdsPerHour[i] - yearly$BirdsPerHour[i-1]
 }
 
-yearly_cbc <- aggregate(BirdsPerHour ~ Year, data = cbc_data, FUN = sum)
+yearly_cbc <- aggregate(BirdsPerHour ~ Year, data = cbc_data_red, FUN = sum)
 yearly_cbc <- dplyr::add_row(
   yearly_cbc,
   Year = 1984,
@@ -114,7 +130,16 @@ for (i in 2:nrow(yearly_cbc))
 
 # Total species each year
 yearly <- merge(yearly, count_data[, c("Year", "TotalSp")], by = "Year")
+yearly_sp_trend_poisson <- glm(TotalSp ~ Year, data = yearly, family = poisson(link = "log"))
 yearly_sp_trend <- lm(TotalSp ~ Year, data = yearly)
+
+cbc_red_nonzero <- cbc_data_red[which(cbc_data_red$BirdsPerHour > 0), ]
+cbc_sp_count <- aggregate(cbc_red_nonzero$Species, by = list(cbc_red_nonzero$Year), FUN = length)
+yearly_cbc <- merge(yearly_cbc, cbc_sp_count, by.x = "Year", by.y = "Group.1", all = TRUE)
+names(yearly_cbc)[5] <- "TotalSp"
+yearly_sp_trend_cbc_poisson <- glm(TotalSp ~ Year, data = yearly_cbc, family = poisson(link = "log"))
+yearly_sp_trend_cbc <- lm(TotalSp ~ Year, data = yearly_cbc)
+
 
 # Calculate species accumulation each year
 yearly$Accumulation <- NA
@@ -149,22 +174,27 @@ yearly_abundance_plot <- ggplot() +
   ylab("Birds Per Party Hour") +
   #geom_line(data = yearly, aes(x = Year, y = Rolling), size = 1.25) +
   #annotate("segment", x = 1996, xend = 1987, y = 42, yend = 42, colour = "blue") +
-  #annotate("text", x = 2004, y = 42, label = "Survey Minimum: 42 (1987)") +
+  annotate("text", x = 2012, y = 230, label = paste0("r = ", round(abund_correlation_fd$estimate, 2), "*")) +
   #annotate("segment", x = 1996+6, xend = 1987+6, y = 733, yend = 733, colour = "blue") +
   #annotate("text", x = 2004+6, y = 733, label = "Survey Maximum: 733\n(1993)") +
   NULL
 
 # plot total species by year
-yearly_sp_plot <- ggplot(data = yearly, aes(x = Year, y = TotalSp)) +
-  geom_line(size = 1.25) +
-  ylim(0, max(yearly$TotalSp) + 10) +
-  stat_summary(fun.data=mean_cl_normal) + 
-  geom_smooth(method='lm', formula= y~x) +
-  annotate("segment", x = 1985, xend = 1980, y = 5, yend = 11, colour = "blue") +
-  annotate("segment", x = 1985, xend = 1982, y = 5, yend = 11, colour = "blue") +
-  annotate("text", x = 1990, y = 3, label = "Survey Minimum: 11\n(1980 & 1982)") +
-  annotate("segment", x = 2010, xend = 2021, y = 35, yend = 29, colour = "blue") +
-  annotate("text", x = 2008, y = 35, label = "Survey Maximum: 29\n(2021)") +
+yearly_sp_plot <- ggplot() +
+  geom_line(data = yearly, aes(x = Year, y = TotalSp), size = 1.5) +
+ # stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(data = yearly, aes(x = Year, y = TotalSp),
+              method='lm') +
+  geom_line(data = yearly_cbc, aes(x = Year, y = TotalSp)) +
+  # stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(data = yearly_cbc, aes(x = Year, y = TotalSp),
+              method='lm') +
+  annotate("segment", x = 1995, xend = 2000, y = 26, yend = 29, colour = "blue") +
+  annotate("segment", x = 1999, xend = 2004, y = 48, yend = 46, colour = "blue") +
+  annotate("text", x = 2007, y = 29, label = paste0("WBC: Trend = ", round(coef(yearly_sp_trend)[2], 3), "*")) +
+  annotate("text", x = 2011, y = 46, label = paste0("CBC: Trend = ", round(coef(yearly_sp_trend_cbc)[2], 3), "*")) +
+  # annotate("segment", x = 2010, xend = 2021, y = 35, yend = 29, colour = "blue") +
+  # annotate("text", x = 2008, y = 35, label = "Survey Maximum: 29\n(2021)") +
   ylab("Number of Species") +
   NULL
 
@@ -203,7 +233,7 @@ for (i in 2:nrow(gull_select_wbc_all))
   gull_select_wbc_all$FD[i] <- gull_select_wbc_all$BirdsPerHour[i] - gull_select_wbc_all$BirdsPerHour[i-1]
 }
 
-gull_select_cbc <- cbc_data[which(cbc_data$Species %in% gulls), ]
+gull_select_cbc <- cbc_data_red[which(cbc_data_red$Species %in% gulls), ]
 gull_select_cbc$Species <- factor(gull_select_cbc$Species,
                           levels = c("Ring-billed Gull",
                                      "Herring Gull",
@@ -256,7 +286,7 @@ gull_plot <- ggplot() +
 sp <- c("Red-bellied Woodpecker", "Evening Grosbeak", "Ruffed Grouse", "Mourning Dove", "Downy Woodpecker", "American Tree Sparrow")
 
 sp_select <- combined_red[which(combined_red$Species %in% sp), ]; sp_select$dataset <- "WBC"
-cbc_select <- cbc_data[which(cbc_data$Species %in% sp), ]; cbc_select$dataset <- "CBC"
+cbc_select <- cbc_data_red[which(cbc_data_red$Species %in% sp), ]; cbc_select$dataset <- "CBC"
 
 wbc_cbc <- rbind(sp_select[, c("Species", "Year", "BirdsPerHour", "dataset")],
                  cbc_select[, c("Species", "Year", "BirdsPerHour", "dataset")])
@@ -265,6 +295,8 @@ wbc_cbc <- wbc_cbc[-which(wbc_cbc$Year == 1983), ]
 
 corr_coefs <- vector(mode = "list", length = length(sp))
 names(corr_coefs) <- sp
+corr_coefs_nonzero <- vector(mode = "list", length = 2)
+names(corr_coefs_nonzero) <- c("Red-bellied Woodpecker", "Evening Grosbeak")
 trends_wbc <- vector(mode = "list", length = length(sp))
 names(trends_wbc) <- sp
 trends_cbc <- vector(mode = "list", length = length(sp))
@@ -281,6 +313,23 @@ for (s in sp)
                                            temp$Year >= 1986), "BirdsPerHour"],
                               temp[which(temp$dataset == "CBC" &
                                            temp$Year >= 1986), "BirdsPerHour"])
+  if (s == "Red-bellied Woodpecker")
+  {
+    corr_coefs_nonzero[[s]] <- cor.test(temp[which(temp$dataset == "WBC" &
+                                                     temp$Year >= 2010), "BirdsPerHour"],
+                                        temp[which(temp$dataset == "CBC" &
+                                                     temp$Year >= 2010), "BirdsPerHour"])
+  }
+  
+  if (s == "Evening Grosbeak")
+  {
+    corr_coefs_nonzero[[s]] <- cor.test(temp[which(temp$dataset == "WBC" &
+                                                     temp$Year >= 1986 & 
+                                                     temp$Year <= 1995), "BirdsPerHour"],
+                                        temp[which(temp$dataset == "CBC" &
+                                                     temp$Year >= 1986 & 
+                                                     temp$Year <= 1995), "BirdsPerHour"])
+  }
   trends_wbc[[s]] <- lm(BirdsPerHour ~ Year, data = temp[which(temp$dataset == "WBC" & temp$Year >= 1986),])
   trends_cbc[[s]] <- lm(BirdsPerHour ~ Year, data = temp[which(temp$dataset == "CBC" & temp$Year >= 1986),])
 }
@@ -291,7 +340,7 @@ rugr <- ggplot() +
                              aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Ruffed Grouse", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Ruffed Grouse"]]$estimate, digits = 2))) +
+  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Ruffed Grouse"]]$estimate, digits = 2), "*")) +
  # geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Ruffed Grouse"),
   #                                    c("Year", "BirdsPerHour")], k = 5)),
            # aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -305,7 +354,7 @@ rbwo <- ggplot() +
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Red-bellied Woodpecker", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Red-bellied Woodpecker"]]$estimate, digits = 2))) +
+  annotate("text", x = 2010, y = 2.5, label = paste0("r = ", round(corr_coefs[["Red-bellied Woodpecker"]]$estimate, digits = 2), "*")) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Red-bellied Woodpecker"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
             #aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -333,7 +382,7 @@ evgr <- ggplot() +
             aes(x = Year, y = BirdsPerHour), size = 1.25) +
   geom_line(data = cbc_select[cbc_select$Species == "Evening Grosbeak", ], 
             aes(x = Year, y = BirdsPerHour)) +
-  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Evening Grosbeak"]]$estimate, digits = 2))) +
+  annotate("text", x = 2010, y = 17, label = paste0("r = ", round(corr_coefs[["Evening Grosbeak"]]$estimate, digits = 2), "*")) +
   #geom_line(data = data.frame(rollmean(sp_select[which(sp_select$Species == "Evening Grosbeak"),
    #                                              c("Year", "BirdsPerHour")], k = 5)),
            # aes(x = Year, y = BirdsPerHour), size = 1.25) +
@@ -375,7 +424,8 @@ sp_select_abundance <- ggarrange(rbwo, evgr,
                                  rugr, modo, 
                                  dowo, atsp,
   nrow = 3, ncol = 2,
-  labels = c("RBWO", "EVGR", "RUGR", "MODO", "DOWO", "ATSP")
+  labels = c("RBWO", "EVGR", "RUGR", "MODO", "DOWO", "ATSP"),
+  vjust = 2.5, hjust = -0.75
 )
 
 ####### Output Data and Plots #####################
