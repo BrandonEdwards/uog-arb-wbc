@@ -174,7 +174,7 @@ yearly_abundance_plot <- ggplot() +
   ylab("Birds Per Party Hour") +
   #geom_line(data = yearly, aes(x = Year, y = Rolling), size = 1.25) +
   #annotate("segment", x = 1996, xend = 1987, y = 42, yend = 42, colour = "blue") +
-  annotate("text", x = 2012, y = 230, label = paste0("r = ", round(abund_correlation_fd$estimate, 2), "*")) +
+  annotate("text", x = 2012, y = 230, label = paste0("r = ", round(abund_correlation_fd$estimate, 2))) +
   #annotate("segment", x = 1996+6, xend = 1987+6, y = 733, yend = 733, colour = "blue") +
   #annotate("text", x = 2004+6, y = 733, label = "Survey Maximum: 733\n(1993)") +
   NULL
